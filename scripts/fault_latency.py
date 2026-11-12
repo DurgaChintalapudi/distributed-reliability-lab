@@ -5,6 +5,7 @@ Send load to http://localhost:8002/orders to observe the injected latency.
 """
 import json
 import urllib.request
+import urllib.error
 
 API = "http://localhost:8474"
 NAME = "order_latency"
