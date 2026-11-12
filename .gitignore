@@ -5,3 +5,6 @@ __pycache__/
 .env
 *.log
 .DS_Store
+
+# Generated experimental evidence (uploaded as CI artifacts)
+artifacts/

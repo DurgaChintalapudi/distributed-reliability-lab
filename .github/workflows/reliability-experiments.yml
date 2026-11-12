@@ -1,0 +1,34 @@
+name: Reliability experiment reports
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/experiment_suite.py"
+      - ".github/workflows/reliability-experiments.yml"
+  pull_request:
+    paths:
+      - "scripts/experiment_suite.py"
+      - ".github/workflows/reliability-experiments.yml"
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start synthetic lab
+        run: docker compose up --build -d
+      - name: Run measured baseline and broker outage
+        run: python3 scripts/experiment_suite.py --count 10 --broker-outage --out artifacts/reliability
+      - name: Upload reproducible results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reliability-experiment-results
+          path: artifacts/reliability/
+          if-no-files-found: warn
+      - name: Capture diagnostics on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color --tail=150
+      - name: Tear down
+        if: always()
+        run: docker compose down --remove-orphans
