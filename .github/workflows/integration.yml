@@ -1,0 +1,23 @@
+name: Docker integration
+on:
+  push:
+  pull_request:
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start Kafka, APIs and Prometheus
+        run: docker compose up --build -d
+      - name: Verify end-to-end event delivery
+        run: python3 scripts/integration_smoke.py
+      - name: Capture logs on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color --tail=150
+      - name: Shut down lab
+        if: always()
+        run: docker compose down --remove-orphans
