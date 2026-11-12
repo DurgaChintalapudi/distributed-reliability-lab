@@ -1,10 +1,13 @@
 # Explicit limitations and safety boundaries
 
-- **Synthetic only.** No real customer, payment, or employer data.
-- **No production guarantees.** Single broker, plaintext Kafka, no authentication, no persistence for the order API.
-- **Idempotency is illustrative only.** The inventory consumer uses an in-memory set, which resets on restart; commit and side effects are not atomic. It does not guarantee exactly-once processing.
-- **No business inventory state.** A processed event is logged; stock is not decremented.
-- **No distributed tracing or Grafana yet.** Prometheus is the initial observability layer.
-- **No formal load testing yet.** The included script sends sequential requests and is intended as a basic smoke-load baseline, not a throughput benchmark.
-- **No automatic topic provisioning.** Kafka auto-creates the topic in this local lab; production designs should define topic configurations explicitly.
-- **No performance claims.** Publish only measurements collected from reproducible runs.
+- **Synthetic only:** No customer, payment, or employer data.
+- **Local lab only:** One Kafka broker, plaintext transport, no authentication or HA. Bind public-facing endpoints only on trusted machines.
+- **Order state is ephemeral:** API state is lost when the order container restarts.
+- **Inventory ledger is durable across container restarts:** SQLite database resides in the `inventory-data` Docker volume, but deleting the volume deletes the ledger.
+- **No end-to-end exactly-once semantics:** The SQLite transaction and Kafka offset commit are separate. Replays are deduplicated by event ID; stock is not decremented.
+- **Consumer lag is approximate:** Scraped per assigned partition after poll loops, not a cluster-wide lag monitor.
+- **Tracing scope:** FastAPI HTTP spans and an order-side publish span; Kafka producer-to-consumer context propagation is not yet implemented.
+- **Fault injection scope:** Toxiproxy simulates HTTP-facing latency, not broker network partitions.
+- **Benchmarks are not measured:** k6 load script and methodology are provided, but results must be collected and published separately.
+- **Topic configuration:** Kafka auto-creates topics; no production-grade topic provisioning.
+- **Grafana uses a demo password and anonymous local viewing:** Do not expose to the public internet.
