@@ -36,7 +36,7 @@ services:
     command: uvicorn app.inventory:app --host 0.0.0.0 --port 8001
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      INVENTORY_DELAY_SECONDS: "0"
+      INVENTORY_DELAY_SECONDS: ${INVENTORY_DELAY_SECONDS:-0}
       INVENTORY_DB_PATH: /data/inventory.db
       OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
     volumes: ["inventory-data:/data"]
