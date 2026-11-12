@@ -2,7 +2,7 @@
 
 **A reproducible, synthetic environment for studying failure propagation, recovery, and architectural tradeoffs in distributed systems.**
 
-> **Status:** Milestone 1 scaffold. The services and Compose configuration are initial implementations, not yet validated end-to-end on a running Docker environment. This repository makes no performance or production-readiness claims.
+> **Status:** Milestone 1 and 2 CI integration verified on GitHub Actions. Resilience/observability extensions are proposed in a review branch and require integration validation. No production-readiness or benchmark claims.
 
 ## Why this exists
 
@@ -70,6 +70,33 @@ Stop everything:
 docker compose down
 ```
 
+## Observability and resilience extensions
+
+When the resilience branch is merged and its CI validated:
+
+- **Grafana:** http://localhost:3000 (local-only; anonymous viewer, demo credentials)
+- **Jaeger traces:** http://localhost:16686 (local-only)
+- **Prometheus:** http://localhost:9090
+- **Durable deduplication:** SQLite-backed synthetic inventory ledger on a named Docker volume. Replayed Kafka events do not duplicate ledger entries; this is not distributed exactly-once processing.
+- **Consumer lag:** Approximate per-assigned-partition lag metric in Prometheus.
+
+Optional synthetic HTTP latency injection:
+
+```bash
+docker compose --profile experiments up --build -d
+python3 scripts/fault_latency.py
+# Send synthetic requests to http://localhost:8002/orders
+curl -X DELETE http://localhost:8474/proxies/orders/toxics/order_latency
+```
+
+Optional repeatable load experiment:
+
+```bash
+docker compose --profile load run --rm -e VUS=5 -e DURATION=30s k6 run /scripts/k6-orders.js
+```
+
+Read [benchmark methodology](docs/benchmarks.md), [durable deduplication ADR](docs/adr-004-durable-deduplication.md), and [fault-injection ADR](docs/adr-005-fault-injection.md). No benchmark results have been collected or claimed.
+
 ## Experiment 01: broker outage
 
 With the stack running, submit a baseline order, stop Kafka with `docker compose stop kafka`, and submit another order. Record status codes, request latency, and `order_publish_failures_total`. Restart Kafka and measure recovery. See [experiment protocol](docs/experiments.md).
@@ -93,12 +120,12 @@ With the stack running, submit a baseline order, stop Kafka with `docker compose
 
 - [x] First service implementations and local infrastructure scaffold
 - [x] Basic Prometheus instrumentation and API unit tests
-- [ ] Verify full Docker Compose startup and Kafka end-to-end flow
-- [ ] Add Grafana dashboards, consumer lag metrics and distributed traces
-- [ ] Add Toxiproxy fault injection and controlled latency experiments
-- [ ] Implement durable idempotency and explicit failure handling
-- [ ] Run repeatable load tests and publish evidence-backed results
-- [ ] Document resilience patterns and architecture tradeoffs
+- [x] Verify full Docker Compose startup and Kafka end-to-end flow in GitHub Actions
+- [x] Implement Grafana dashboards, approximate consumer lag and initial HTTP tracing (pending review CI)
+- [x] Add optional Toxiproxy HTTP latency injection (pending review CI)
+- [x] Add SQLite event deduplication with unit test (pending review CI)
+- [ ] Execute repeatable k6 load tests and publish measured results
+- [x] Document resilience patterns, ADRs, and limitations
 
 ## Principles
 

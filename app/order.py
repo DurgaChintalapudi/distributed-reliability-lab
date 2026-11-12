@@ -1,11 +1,12 @@
-import os
 import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, make_asgi_app
 from app.common import producer_with_retry
+from app.tracing import configure_tracing
 
-app = FastAPI(title="Order Service", version="0.1.0")
+app = FastAPI(title="Order Service", version="0.2.0")
+tracer = configure_tracing(app, "order-api")
 app.mount("/metrics", make_asgi_app())
 orders = {}
 created = Counter("orders_created_total", "Orders accepted")
@@ -25,10 +26,14 @@ def create_order(request: OrderRequest):
     order_id = str(uuid.uuid4())
     event = {"event_id": str(uuid.uuid4()), "event_type": "order.created", "order_id": order_id, "sku": request.sku, "quantity": request.quantity}
     try:
-        with publish_duration.time():
-            producer = producer_with_retry(attempts=3, delay=1)
-            producer.send("orders", event).get(timeout=10)
-            producer.close(timeout=5)
+        with tracer.start_as_current_span("kafka.publish.order_created") as span:
+            span.set_attribute("messaging.destination.name", "orders")
+            with publish_duration.time():
+                producer = producer_with_retry(attempts=3, delay=1)
+                try:
+                    producer.send("orders", event).get(timeout=10)
+                finally:
+                    producer.close(timeout=5)
     except Exception as exc:
         publish_failures.inc()
         raise HTTPException(status_code=503, detail="Event broker unavailable") from exc
