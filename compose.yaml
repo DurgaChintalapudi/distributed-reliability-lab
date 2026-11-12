@@ -26,6 +26,7 @@ services:
     command: uvicorn app.order:app --host 0.0.0.0 --port 8000
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
     ports: ["8000:8000"]
     depends_on:
       kafka:
@@ -36,6 +37,9 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       INVENTORY_DELAY_SECONDS: "0"
+      INVENTORY_DB_PATH: /data/inventory.db
+      OTEL_EXPORTER_OTLP_ENDPOINT: otel-collector:4317
+    volumes: ["inventory-data:/data"]
     ports: ["8001:8001"]
     depends_on:
       kafka:
@@ -46,3 +50,45 @@ services:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports: ["9090:9090"]
     depends_on: [orders, inventory]
+  grafana:
+    image: grafana/grafana:11.6.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: lab-only-change-me
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [prometheus]
+  jaeger:
+    image: jaegertracing/all-in-one:1.65.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["127.0.0.1:16686:16686"]
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.123.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otelcol/config.yaml:ro
+    depends_on: [jaeger]
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.11.0
+    profiles: ["experiments"]
+    command: ["-host=0.0.0.0"]
+    ports: ["127.0.0.1:8474:8474", "127.0.0.1:8002:8666"]
+  toxiproxy-setup:
+    image: curlimages/curl:8.12.1
+    profiles: ["experiments"]
+    depends_on: [toxiproxy]
+    command: ["-fsS", "--retry", "15", "--retry-connrefused", "--retry-delay", "1", "-X", "POST", "http://toxiproxy:8474/proxies", "-H", "Content-Type: application/json", "-d", "{\"name\":\"orders\",\"listen\":\"0.0.0.0:8666\",\"upstream\":\"orders:8000\"}"]
+  k6:
+    image: grafana/k6:0.57.0
+    profiles: ["load"]
+    volumes: ["./load:/scripts:ro"]
+    entrypoint: ["k6"]
+    command: ["run", "/scripts/k6-orders.js"]
+    depends_on: [orders]
+volumes:
+  inventory-data:
